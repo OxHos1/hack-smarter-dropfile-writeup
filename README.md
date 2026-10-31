@@ -102,14 +102,6 @@ else:
     file_path = filename_str[first_slash_idx+1:]   # no validation
 ```
 
-**Validation:** I confirmed that a request could read a file outside the upload directory. The response returned the contents of a system file, which showed a low-privilege user account on the host.
-
-![traversal validation](screenshots/04_traversal.png)
-
-**Impact:** arbitrary file read as the application user. This exposed application source, `app_data.json` (plaintext passwords), and SSH key material readable by that user.
-
----
-
 ### Finding 2: Weak request signing (length extension)
 
 **Root cause:** the signature is `SHA-256(secret || data)`, a plain hash over a concatenated secret. Hashes built this way are vulnerable to **length extension**: given one valid `(data, signature)` pair, an attacker can compute a valid signature for extended data without knowing the secret, if they can estimate the secret's length. This construction is not an HMAC, which is the standard primitive for message authentication.
@@ -117,12 +109,6 @@ else:
 ```python
 sig = hashlib.sha256((secret + data).encode()).hexdigest()
 ```
-
-**Validation:** I obtained one legitimate signed URL through the normal `/share` flow, then confirmed that the endpoint accepted a signature derived from it. Details of the forgery are omitted from this writeup.
-
-![signed request](screenshots/07_signed_request.png)
-
-**Impact:** the signature is the only access control on `/download`. Bypassing it lets an unauthenticated attacker request files the application never intended to expose.
 
 ---
 
@@ -156,13 +142,38 @@ I registered a normal user account through the web application, which was the st
 Uploading a file and downloading it again produced a signed request, which showed the parameter structure the server expects.
 
 ![upload](screenshots/10_upload.png)
+
+burpsuite uploading request 
+
+![user access](screenshots/12_user_access.png)
+
+
+
+**Impact:** the signature is the only access control on `/download`. Bypassing it lets an unauthenticated attacker request files the application never intended to expose.
+
+
 ![download request](screenshots/11_download_request.png)
+
+**Validation:** when downloaded the file and forward the request to repeater to get the download link.
+
+![signed request](screenshots/2026-10-31_08-35.png)
+
 
 With the traversal and signature weaknesses from Section 3, the `/download` endpoint returned a file from outside the upload directory. Reading the account database and the system user list identified a local user account. The same file-read primitive then retrieved that user's SSH private key, which allowed a login as that user.
 
-**Note:** key material and the working request are removed from this writeup. Reproduce the steps only on your own lab or an authorized target.
 
-![user access](screenshots/12_user_access.png)
+**Validation:** I confirmed that a request could read a file outside the upload directory. The response returned the contents of a system file, which showed a low-privilege user account on the host.
+
+![traversal validation](screenshots/04_traversal.png)
+
+
+From `/etc/passwd` we can see there is user name called `ravi` , so let us try to update our exploit.py and try to get ravi ssh key `/home/ravi/.ssh/id_rsa`
+
+![ssh sign in](screenshots/ssh.png)
+
+we get SSH key for user ravi we can now login and get user flag
+and we can get user flag!!
+![user_flag](screenshots/user_flag.png)
 
 ---
 
@@ -184,6 +195,8 @@ User ravi may run the following commands on dropfile:
 - `/opt/backup.py` is a Python 2 script. Reading it is the next step.
 
 ### Source review
+
+![script](screenshots/cat_python_for_root.png)
 
 The script calls `input()` for its confirmation prompt. In Python 2, `input()` **evaluates** what the user types as a Python expression. In Python 3, `input()` returns a plain string, and `raw_input()` is the Python 2 equivalent.
 
@@ -240,3 +253,4 @@ Because the script trusts `input()` to return a string, any expression typed at 
 - Hand-rolled MACs are a known anti-pattern. Use HMAC.
 - Check `sudo -l` on every shell, and read every allowed command, including the interpreter.
 - Python 2 `input()` evaluates its input. Treat it as code execution.
+
