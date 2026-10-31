@@ -172,7 +172,6 @@ From `/etc/passwd` we can see there is user name called `ravi` , so let us try t
 ![ssh sign in](screenshots/ssh.png)
 
 we get SSH key for user ravi we can now login and get user flag
-and we can get user flag!!
 ![user_flag](screenshots/user_flag.png)
 
 ---
